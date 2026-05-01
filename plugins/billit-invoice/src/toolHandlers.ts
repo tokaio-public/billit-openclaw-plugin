@@ -11,7 +11,7 @@ import {
   OAuthRefreshSchema,
   SendInvoiceSchema,
   VerifyWebhookSchema,
-} from "./schemas.js";
+} from "./schemas";
 import { redactUnknown } from "./redaction.js";
 import type { BillitClient } from "./billitClient.js";
 
