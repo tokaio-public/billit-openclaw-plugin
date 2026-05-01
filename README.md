@@ -36,3 +36,33 @@ Manage invoices for Billit e-invoicing through an OpenClaw plugin + skill archit
 - Keep state-changing invoice operations behind human approval.
 - Keep production disabled until sandbox test checklist is complete.
 - Never log or return raw tokens, signatures, or unmasked invoice payloads.
+
+## TODO: Billit API endpoint coverage gap analysis
+
+Comparison sources:
+
+- Implemented endpoints in `plugins/billit-invoice/src/billitClient.ts`
+- Billit endpoint catalog in https://docs.billit.be/reference
+
+Missing endpoints from Billit reference:
+
+- Party: GET `/v1/parties`, POST `/v1/parties`, GET `/v1/parties/{partyID}`, PATCH `/v1/parties/{partyID}`
+- Order: PUT `/v1/orders/{orderID}/bookingEntries`, PATCH `/v1/orders/{orderID}`, DEL `/v1/orders/{orderID}`, POST `/v1/orders/{orderID}/payments`, GET `/v1/orders/deleted`
+- File: GET `/v1/files/{fileID}`
+- Accountant feeds: GET `/v1/accountant/feeds`, register feed (POST), feed index/download list (GET), delete feed (DEL), confirm feed item (POST), download feed file (GET)
+- Account: GET `/v1/account/accountInformation`, GET `/v1/account/ssoToken`, POST `/v1/account/sequences`, POST `/v1/account/registercompany`
+- Document: GET `/v1/documents`, POST `/v1/documents`, GET `/v1/documents/{documentID}`
+- Financial transactions: POST `/v1/financialTransactions/importFile`, POST `/v1/financialTransactions/commands/import`, GET `/v1/financialTransactions`
+- GL accounts and journals: POST `/v1/glaccounts`, POST `/v1/glaccounts/commands/import`, POST `/v1/journals/commands/import`
+- Products: get single product (GET), list products (GET), create/update product (POST)
+- ToProcess: POST `/v1/toProcess`, DEL `/v1/toProcess/{uploadID}`
+- Peppol: POST `/v1/peppol/participants`, DEL `/v1/peppol/participants`, GET `/v1/peppol/inbox`, POST `/v1/peppol/inbox/{inboxItemId}/confirm`, POST `/v1/peppol/inbox/{inboxItemID}/refuse`, POST `/v1/peppol/sendOrder`, GET `/v1/peppol/participantInformation/{VATorCBE}`
+- Misc: GET `/v1/misc/companysearch/{Keywords}`, GET `/v1/misc/typecodes/{TypeCodeType}`, GET `/v1/misc/typecodes/{TypeCodeType}/{key}`
+- OAuth2: POST `/OAuth2/revoke`
+- Reports: GET `/v1/reports`, GET `/v1/reports/{reportID}`
+- Webhooks: create webhook (POST), get webhooks (GET), delete webhook (DEL), refresh webhook (POST)
+
+Notes:
+
+- Local webhook signature verification exists in the plugin, but Billit webhook-management API endpoints are not implemented yet.
+- For some entries (accountant feeds, products, webhooks), the docs navigation lists operation titles and not always the exact path in the index; confirm exact paths on the endpoint detail pages before implementing.
