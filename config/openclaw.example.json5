@@ -1,0 +1,75 @@
+{
+  gateway: {
+    mode: "local",
+    bind: "loopback",
+    auth: { mode: "token", token: "replace-with-strong-random-token" },
+  },
+  session: {
+    dmScope: "per-channel-peer",
+  },
+  plugins: {
+    enabled: true,
+    allow: ["billit-invoice"],
+    entries: {
+      "billit-invoice": {
+        enabled: true,
+        config: {
+          apiBaseUrl: "https://api.sandbox.billit.be",
+          timeoutMs: 10000,
+          retries: { maxAttempts: 3, baseDelayMs: 250, maxDelayMs: 4000 },
+        },
+      },
+    },
+  },
+  tools: {
+    profile: "messaging",
+    allow: [
+      "billit_invoices_list",
+      "billit_invoice_get",
+      "billit_invoice_create",
+      "billit_invoice_send",
+      "billit_oauth_exchange",
+      "billit_oauth_refresh",
+      "billit_webhook_verify",
+    ],
+    deny: ["group:runtime", "group:fs", "group:automation", "browser", "gateway", "cron"],
+    fs: { workspaceOnly: true },
+  },
+  skills: {
+    entries: {
+      "billit-invoice-ops": { enabled: true },
+    },
+  },
+  agents: {
+    defaults: {
+      skills: [],
+    },
+    list: [
+      {
+        id: "billing-agent",
+        skills: ["billit-invoice-ops"],
+        tools: {
+          allow: [
+            "billit_invoices_list",
+            "billit_invoice_get",
+            "billit_invoice_create",
+            "billit_invoice_send",
+            "billit_oauth_exchange",
+            "billit_oauth_refresh",
+            "billit_webhook_verify",
+          ],
+          deny: ["group:runtime", "group:fs", "group:automation", "gateway", "cron", "browser"],
+        },
+      },
+      {
+        id: "general-agent",
+        skills: [],
+        tools: { profile: "minimal" },
+      },
+    ],
+  },
+  logging: {
+    redactSensitive: "tools",
+    redactPatterns: ["Bearer\\s+[A-Za-z0-9._-]+", "BILLIT_[A-Z_]+", "ApiKey\\s*[:=]\\s*[^\\s]+"],
+  },
+}

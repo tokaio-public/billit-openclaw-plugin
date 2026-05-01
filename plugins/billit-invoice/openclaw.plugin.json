@@ -1,0 +1,34 @@
+{
+  "id": "billit-invoice",
+  "name": "Billit Invoice",
+  "description": "Secure Billit invoice operations for OpenClaw",
+  "version": "0.1.0",
+  "activation": {
+    "onStartup": true,
+    "onCapabilities": ["tool"]
+  },
+  "skills": ["./skills"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "apiBaseUrl": { "type": "string", "default": "https://api.sandbox.billit.be" },
+      "timeoutMs": { "type": "integer", "minimum": 1000, "maximum": 60000, "default": 10000 },
+      "retries": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 8, "default": 3 },
+          "baseDelayMs": { "type": "integer", "minimum": 50, "maximum": 5000, "default": 250 },
+          "maxDelayMs": { "type": "integer", "minimum": 100, "maximum": 30000, "default": 4000 }
+        }
+      }
+    }
+  },
+  "uiHints": {
+    "apiBaseUrl": {
+      "label": "Billit API base URL",
+      "help": "Use sandbox for development, production only after approval"
+    }
+  }
+}
