@@ -30,9 +30,11 @@ type RequestArgs = {
   partyId?: string | number;
   idempotencyKey?: string;
   strictTransportType?: boolean;
-  method: "GET" | "POST";
+  method: "GET" | "POST" | "DELETE" | "PATCH" | "PUT";
   path: string;
   body?: unknown;
+  /** Skip the auth check; used for OAuth endpoints that don't require a token */
+  skipAuthCheck?: boolean;
 };
 
 type FetchLike = typeof fetch;
@@ -158,6 +160,888 @@ export class BillitClient {
     });
   }
 
+  // ── Order extensions ────────────────────────────────────────────────────────
+
+  async patchOrder(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    orderId: string | number;
+    updates: unknown;
+    idempotencyKey: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "PATCH",
+      path: `/v1/orders/${encodeURIComponent(String(input.orderId))}`,
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+      idempotencyKey: input.idempotencyKey,
+      body: input.updates,
+    });
+  }
+
+  async deleteOrder(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    orderId: string | number;
+  }): Promise<unknown> {
+    return this.request({
+      method: "DELETE",
+      path: `/v1/orders/${encodeURIComponent(String(input.orderId))}`,
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+    });
+  }
+
+  async addOrderPayment(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    orderId: string | number;
+    amount?: number;
+    description?: string;
+    date?: string;
+    idempotencyKey: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "POST",
+      path: `/v1/orders/${encodeURIComponent(String(input.orderId))}/payments`,
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+      idempotencyKey: input.idempotencyKey,
+      body: {
+        Amount: input.amount,
+        Description: input.description,
+        Date: input.date,
+      },
+    });
+  }
+
+  async getDeletedOrders(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+  }): Promise<unknown> {
+    return this.request({
+      method: "GET",
+      path: "/v1/orders/deleted",
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+    });
+  }
+
+  async putOrderBookingEntries(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    orderId: string | number;
+    entries: unknown;
+    idempotencyKey: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "PUT",
+      path: `/v1/orders/${encodeURIComponent(String(input.orderId))}/bookingEntries`,
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+      idempotencyKey: input.idempotencyKey,
+      body: input.entries,
+    });
+  }
+
+  // ── Party ────────────────────────────────────────────────────────────────────
+
+  async listParties(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    fullTextSearch?: string;
+  }): Promise<unknown> {
+    const qs = input.fullTextSearch
+      ? `?fullTextSearch=${encodeURIComponent(input.fullTextSearch)}`
+      : "";
+    return this.request({
+      method: "GET",
+      path: `/v1/parties${qs}`,
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+    });
+  }
+
+  async createParty(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    party: unknown;
+    idempotencyKey: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "POST",
+      path: "/v1/parties",
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+      idempotencyKey: input.idempotencyKey,
+      body: input.party,
+    });
+  }
+
+  async getParty(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    targetPartyId: string | number;
+  }): Promise<unknown> {
+    return this.request({
+      method: "GET",
+      path: `/v1/parties/${encodeURIComponent(String(input.targetPartyId))}`,
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+    });
+  }
+
+  async patchParty(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    targetPartyId: string | number;
+    updates: unknown;
+    idempotencyKey: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "PATCH",
+      path: `/v1/parties/${encodeURIComponent(String(input.targetPartyId))}`,
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+      idempotencyKey: input.idempotencyKey,
+      body: input.updates,
+    });
+  }
+
+  // ── File ──────────────────────────────────────────────────────────────────────
+
+  async getFile(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    fileId: string | number;
+  }): Promise<unknown> {
+    return this.request({
+      method: "GET",
+      path: `/v1/files/${encodeURIComponent(String(input.fileId))}`,
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+    });
+  }
+
+  // ── Accountant feeds ─────────────────────────────────────────────────────────
+
+  async getAccountantFeeds(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+  }): Promise<unknown> {
+    return this.request({
+      method: "GET",
+      path: "/v1/accountant/feeds",
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+    });
+  }
+
+  async createAccountantFeed(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    name: string;
+    idempotencyKey: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "POST",
+      path: "/v1/accountant/feeds",
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+      idempotencyKey: input.idempotencyKey,
+      body: { Name: input.name },
+    });
+  }
+
+  async getAccountantFeedIndex(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    feedName: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "GET",
+      path: `/v1/accountant/feeds/${encodeURIComponent(input.feedName)}`,
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+    });
+  }
+
+  async deleteAccountantFeed(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    feedName: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "DELETE",
+      path: `/v1/accountant/feeds/${encodeURIComponent(input.feedName)}`,
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+    });
+  }
+
+  async confirmAccountantFeedItem(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    feedName: string;
+    feedItemId: string | number;
+    remoteServerName?: string;
+    remotePath?: string;
+    idempotencyKey: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "POST",
+      path: `/v1/accountant/feeds/${encodeURIComponent(input.feedName)}/${encodeURIComponent(String(input.feedItemId))}/confirm`,
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+      idempotencyKey: input.idempotencyKey,
+      body: {
+        RemoteServerName: input.remoteServerName,
+        RemotePath: input.remotePath,
+      },
+    });
+  }
+
+  async downloadAccountantFeedFile(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    feedName: string;
+    feedItemId: string | number;
+  }): Promise<unknown> {
+    return this.request({
+      method: "GET",
+      path: `/v1/accountant/feeds/${encodeURIComponent(input.feedName)}/${encodeURIComponent(String(input.feedItemId))}`,
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+    });
+  }
+
+  // ── Account ──────────────────────────────────────────────────────────────────
+
+  async getAccountInformation(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+  }): Promise<unknown> {
+    return this.request({
+      method: "GET",
+      path: "/v1/account/accountInformation",
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+    });
+  }
+
+  async getSsoToken(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+  }): Promise<unknown> {
+    return this.request({
+      method: "GET",
+      path: "/v1/account/ssoToken",
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+    });
+  }
+
+  async createSequence(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    sequence: unknown;
+    idempotencyKey: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "POST",
+      path: "/v1/account/sequences",
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+      idempotencyKey: input.idempotencyKey,
+      body: input.sequence,
+    });
+  }
+
+  async registerCompany(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    company: unknown;
+    idempotencyKey: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "POST",
+      path: "/v1/account/registercompany",
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+      idempotencyKey: input.idempotencyKey,
+      body: input.company,
+    });
+  }
+
+  // ── Document ─────────────────────────────────────────────────────────────────
+
+  async listDocuments(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    odataFilter?: string;
+  }): Promise<unknown> {
+    const qs = input.odataFilter ? `?$filter=${encodeURIComponent(input.odataFilter)}` : "";
+    return this.request({
+      method: "GET",
+      path: `/v1/documents${qs}`,
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+    });
+  }
+
+  async createDocument(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    document: unknown;
+    idempotencyKey: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "POST",
+      path: "/v1/documents",
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+      idempotencyKey: input.idempotencyKey,
+      body: input.document,
+    });
+  }
+
+  async getDocument(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    documentId: string | number;
+  }): Promise<unknown> {
+    return this.request({
+      method: "GET",
+      path: `/v1/documents/${encodeURIComponent(String(input.documentId))}`,
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+    });
+  }
+
+  // ── Financial transactions ────────────────────────────────────────────────────
+
+  async importTransactionFile(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    fileId?: string;
+    fileName?: string;
+    mimeType?: string;
+    fileContent?: string;
+    idempotencyKey: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "POST",
+      path: "/v1/financialTransactions/importFile",
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+      idempotencyKey: input.idempotencyKey,
+      body: {
+        FileID: input.fileId,
+        FileName: input.fileName,
+        MimeType: input.mimeType,
+        FileContent: input.fileContent,
+      },
+    });
+  }
+
+  async importTransactions(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    transactions: unknown;
+    idempotencyKey: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "POST",
+      path: "/v1/financialTransactions/commands/import",
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+      idempotencyKey: input.idempotencyKey,
+      body: input.transactions,
+    });
+  }
+
+  async listFinancialTransactions(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+  }): Promise<unknown> {
+    return this.request({
+      method: "GET",
+      path: "/v1/financialTransactions",
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+    });
+  }
+
+  // ── GL accounts & journals ────────────────────────────────────────────────────
+
+  async createGLAccount(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    account: unknown;
+    idempotencyKey: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "POST",
+      path: "/v1/glaccounts",
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+      idempotencyKey: input.idempotencyKey,
+      body: input.account,
+    });
+  }
+
+  async importGLAccounts(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    accounts: unknown;
+    idempotencyKey: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "POST",
+      path: "/v1/glaccounts/commands/import",
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+      idempotencyKey: input.idempotencyKey,
+      body: input.accounts,
+    });
+  }
+
+  async importJournals(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    journals: unknown;
+    idempotencyKey: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "POST",
+      path: "/v1/journals/commands/import",
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+      idempotencyKey: input.idempotencyKey,
+      body: input.journals,
+    });
+  }
+
+  // ── Products ──────────────────────────────────────────────────────────────────
+
+  async getProduct(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    productId: string | number;
+  }): Promise<unknown> {
+    return this.request({
+      method: "GET",
+      path: `/v1/products/${encodeURIComponent(String(input.productId))}`,
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+    });
+  }
+
+  async listProducts(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+  }): Promise<unknown> {
+    return this.request({
+      method: "GET",
+      path: "/v1/products",
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+    });
+  }
+
+  async createProduct(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    product: unknown;
+    idempotencyKey: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "POST",
+      path: "/v1/products",
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+      idempotencyKey: input.idempotencyKey,
+      body: input.product,
+    });
+  }
+
+  // ── ToProcess ────────────────────────────────────────────────────────────────
+
+  async submitToProcess(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    payload: unknown;
+    idempotencyKey: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "POST",
+      path: "/v1/toProcess",
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+      idempotencyKey: input.idempotencyKey,
+      body: input.payload,
+    });
+  }
+
+  async deleteToProcess(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    uploadId: string | number;
+  }): Promise<unknown> {
+    return this.request({
+      method: "DELETE",
+      path: `/v1/toProcess/${encodeURIComponent(String(input.uploadId))}`,
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+    });
+  }
+
+  // ── Peppol ────────────────────────────────────────────────────────────────────
+
+  async registerPeppolParticipant(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    companyId: string;
+    idempotencyKey: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "POST",
+      path: "/v1/peppol/participants",
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+      idempotencyKey: input.idempotencyKey,
+      body: { CompanyID: input.companyId },
+    });
+  }
+
+  async deregisterPeppolParticipant(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    companyId: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "DELETE",
+      path: "/v1/peppol/participants",
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+      body: { CompanyID: input.companyId },
+    });
+  }
+
+  async getPeppolInbox(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+  }): Promise<unknown> {
+    return this.request({
+      method: "GET",
+      path: "/v1/peppol/inbox",
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+    });
+  }
+
+  async confirmPeppolInboxItem(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    inboxItemId: string | number;
+    idempotencyKey: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "POST",
+      path: `/v1/peppol/inbox/${encodeURIComponent(String(input.inboxItemId))}/confirm`,
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+      idempotencyKey: input.idempotencyKey,
+    });
+  }
+
+  async refusePeppolInboxItem(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    inboxItemId: string | number;
+    idempotencyKey: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "POST",
+      path: `/v1/peppol/inbox/${encodeURIComponent(String(input.inboxItemId))}/refuse`,
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+      idempotencyKey: input.idempotencyKey,
+    });
+  }
+
+  async sendPeppolOrder(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    order: unknown;
+    idempotencyKey: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "POST",
+      path: "/v1/peppol/sendOrder",
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+      idempotencyKey: input.idempotencyKey,
+      body: input.order,
+    });
+  }
+
+  async getPeppolParticipantInfo(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    vatOrCbe: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "GET",
+      path: `/v1/peppol/participantInformation/${encodeURIComponent(input.vatOrCbe)}`,
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+    });
+  }
+
+  // ── Misc ──────────────────────────────────────────────────────────────────────
+
+  async companySearch(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    keywords: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "GET",
+      path: `/v1/misc/companysearch/${encodeURIComponent(input.keywords)}`,
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+    });
+  }
+
+  async getTypeCodes(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    typeCodeType: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "GET",
+      path: `/v1/misc/typecodes/${encodeURIComponent(input.typeCodeType)}`,
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+    });
+  }
+
+  async getTypeCode(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    typeCodeType: string;
+    key: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "GET",
+      path: `/v1/misc/typecodes/${encodeURIComponent(input.typeCodeType)}/${encodeURIComponent(input.key)}`,
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+    });
+  }
+
+  // ── OAuth2 ────────────────────────────────────────────────────────────────────
+
+  async revokeToken(): Promise<unknown> {
+    return this.request({
+      method: "POST",
+      path: "/OAuth2/revoke",
+      skipAuthCheck: true,
+    });
+  }
+
+  // ── Reports ───────────────────────────────────────────────────────────────────
+
+  async listReports(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+  }): Promise<unknown> {
+    return this.request({
+      method: "GET",
+      path: "/v1/reports",
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+    });
+  }
+
+  async getReport(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    reportId: string | number;
+  }): Promise<unknown> {
+    return this.request({
+      method: "GET",
+      path: `/v1/reports/${encodeURIComponent(String(input.reportId))}`,
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+    });
+  }
+
+  // ── Webhook management ────────────────────────────────────────────────────────
+
+  async createWebhook(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    entityType: string;
+    entityUpdateType: string;
+    webhookUrl: string;
+    idempotencyKey: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "POST",
+      path: "/v1/webhooks",
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+      idempotencyKey: input.idempotencyKey,
+      body: {
+        EntityType: input.entityType,
+        EntityUpdateType: input.entityUpdateType,
+        WebhookURL: input.webhookUrl,
+      },
+    });
+  }
+
+  async listWebhooks(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+  }): Promise<unknown> {
+    return this.request({
+      method: "GET",
+      path: "/v1/webhooks",
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+    });
+  }
+
+  async deleteWebhook(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    webhookId: string | number;
+  }): Promise<unknown> {
+    return this.request({
+      method: "DELETE",
+      path: `/v1/webhooks/${encodeURIComponent(String(input.webhookId))}`,
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+    });
+  }
+
+  async refreshWebhook(input: {
+    accessToken?: string;
+    apiKey?: string;
+    partyId?: string | number;
+    webhookId: string | number;
+    idempotencyKey: string;
+  }): Promise<unknown> {
+    return this.request({
+      method: "POST",
+      path: `/v1/webhooks/refresh/${encodeURIComponent(String(input.webhookId))}`,
+      accessToken: input.accessToken,
+      apiKey: input.apiKey,
+      partyId: input.partyId,
+      idempotencyKey: input.idempotencyKey,
+    });
+  }
+
   verifyWebhookSignature(input: {
     signatureHeader: string;
     payload: string;
@@ -202,6 +1086,7 @@ export class BillitClient {
       method: "POST",
       path: "/OAuth2/token",
       body,
+      skipAuthCheck: true,
     });
 
     const obj = result as Partial<BillitAuthTokens>;
@@ -212,7 +1097,9 @@ export class BillitClient {
   }
 
   private async request(args: RequestArgs): Promise<unknown> {
-    this.assertAuthInput(args);
+    if (!args.skipAuthCheck) {
+      this.assertAuthInput(args);
+    }
 
     const retryCfg: RetryConfig = this.cfg.retries;
     let lastErr: unknown;
