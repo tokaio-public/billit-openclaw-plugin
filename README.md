@@ -2,6 +2,8 @@
 
 Manage invoices for Billit e-invoicing through an OpenClaw plugin + skill architecture.
 
+> **WARNING**: This repository comes with no warranty! For now, it is untested and should therefore be considered NOT-for-production!
+
 ## What is included
 
 - Secure starter OpenClaw plugin scaffold for Billit invoice operations.
