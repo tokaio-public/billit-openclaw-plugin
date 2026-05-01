@@ -1,6 +1,12 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { BillitHttpError, BillitValidationError } from "./errors.js";
-import type { BillitAuthTokens, ListInvoicesResult, PluginConfig, RetryConfig } from "./types.js";
+import type {
+  BillitAuthInput,
+  BillitAuthTokens,
+  ListInvoicesResult,
+  PluginConfig,
+  RetryConfig,
+} from "./types.js";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -20,6 +26,7 @@ function normalizeBaseUrl(url: string): string {
 
 type RequestArgs = {
   accessToken?: string;
+  apiKey?: string;
   partyId?: string | number;
   idempotencyKey?: string;
   strictTransportType?: boolean;
@@ -28,11 +35,15 @@ type RequestArgs = {
   body?: unknown;
 };
 
+type FetchLike = typeof fetch;
+
 export class BillitClient {
   private readonly cfg: PluginConfig;
+  private readonly fetchFn: FetchLike;
 
-  constructor(cfg: PluginConfig) {
+  constructor(cfg: PluginConfig, fetchFn: FetchLike = fetch) {
     this.cfg = { ...cfg, apiBaseUrl: normalizeBaseUrl(cfg.apiBaseUrl) };
+    this.fetchFn = fetchFn;
   }
 
   async exchangeCode(input: {
@@ -64,21 +75,35 @@ export class BillitClient {
   }
 
   async listInvoices(input: {
-    accessToken: string;
+    accessToken?: string;
+    apiKey?: string;
     partyId?: string | number;
     odataFilter?: string;
   }): Promise<ListInvoicesResult> {
     const qs = input.odataFilter ? `?$filter=${encodeURIComponent(input.odataFilter)}` : "";
-    return this.request({
+    const result = await this.request({
       method: "GET",
       path: `/v1/orders${qs}`,
       accessToken: input.accessToken,
+      apiKey: input.apiKey,
       partyId: input.partyId,
     });
+
+    if (
+      typeof result === "object" &&
+      result !== null &&
+      "Items" in result &&
+      Array.isArray((result as { Items?: unknown }).Items)
+    ) {
+      return result as ListInvoicesResult;
+    }
+
+    throw new BillitValidationError("Billit list invoices response has unexpected shape");
   }
 
   async getInvoice(input: {
-    accessToken: string;
+    accessToken?: string;
+    apiKey?: string;
     orderId: string | number;
     partyId?: string | number;
   }): Promise<unknown> {
@@ -86,12 +111,14 @@ export class BillitClient {
       method: "GET",
       path: `/v1/orders/${encodeURIComponent(String(input.orderId))}`,
       accessToken: input.accessToken,
+      apiKey: input.apiKey,
       partyId: input.partyId,
     });
   }
 
   async createInvoice(input: {
-    accessToken: string;
+    accessToken?: string;
+    apiKey?: string;
     invoice: unknown;
     idempotencyKey: string;
     partyId?: string | number;
@@ -100,6 +127,7 @@ export class BillitClient {
       method: "POST",
       path: "/v1/orders",
       accessToken: input.accessToken,
+      apiKey: input.apiKey,
       partyId: input.partyId,
       idempotencyKey: input.idempotencyKey,
       body: input.invoice,
@@ -107,7 +135,8 @@ export class BillitClient {
   }
 
   async sendInvoices(input: {
-    accessToken: string;
+    accessToken?: string;
+    apiKey?: string;
     transportType: string;
     orderIds: Array<string | number>;
     strictTransportType?: boolean;
@@ -118,6 +147,7 @@ export class BillitClient {
       method: "POST",
       path: "/v1/orders/commands/send",
       accessToken: input.accessToken,
+      apiKey: input.apiKey,
       partyId: input.partyId,
       idempotencyKey: input.idempotencyKey,
       strictTransportType: input.strictTransportType,
@@ -152,6 +182,9 @@ export class BillitClient {
     }
 
     const received = sPart.slice(2);
+    if (!/^[a-fA-F0-9]{64}$/.test(received)) {
+      return { valid: false, reason: "invalid_signature_format", timestamp };
+    }
     const data = `${timestamp}.${input.payload}`;
     const expected = createHmac("sha256", input.secret).update(data).digest("hex");
 
@@ -179,6 +212,8 @@ export class BillitClient {
   }
 
   private async request(args: RequestArgs): Promise<unknown> {
+    this.assertAuthInput(args);
+
     const retryCfg: RetryConfig = this.cfg.retries;
     let lastErr: unknown;
 
@@ -187,6 +222,9 @@ export class BillitClient {
         const headers: Record<string, string> = { Accept: "application/json" };
         if (args.accessToken) {
           headers.Authorization = `Bearer ${args.accessToken}`;
+        }
+        if (args.apiKey) {
+          headers.ApiKey = args.apiKey;
         }
         if (args.partyId !== undefined) {
           headers.PartyID = String(args.partyId);
@@ -201,7 +239,7 @@ export class BillitClient {
           headers["Content-Type"] = "application/json";
         }
 
-        const res = await fetch(`${this.cfg.apiBaseUrl}${args.path}`, {
+        const res = await this.fetchFn(`${this.cfg.apiBaseUrl}${args.path}`, {
           method: args.method,
           headers,
           body: args.body === undefined ? undefined : JSON.stringify(args.body),
@@ -216,9 +254,10 @@ export class BillitClient {
         if (!res.ok) {
           const err = new BillitHttpError("Billit API request failed", res.status, responseBody);
           if (isRetriable(res.status) && attempt < retryCfg.maxAttempts) {
-            const waitMs = Math.min(
-              retryCfg.maxDelayMs,
-              withJitter(retryCfg.baseDelayMs * 2 ** (attempt - 1)),
+            const waitMs = this.computeRetryDelayMs(
+              res.status,
+              res.headers.get("retry-after"),
+              attempt,
             );
             await sleep(waitMs);
             continue;
@@ -234,18 +273,51 @@ export class BillitClient {
         }
 
         const isAbort = err instanceof Error && /aborted|timeout/i.test(err.message);
-        if (!isAbort && !(err instanceof BillitHttpError)) {
+        const isRetriableHttpError = err instanceof BillitHttpError && isRetriable(err.status);
+        if (!isAbort && !isRetriableHttpError) {
           break;
         }
 
-        const waitMs = Math.min(
-          retryCfg.maxDelayMs,
-          withJitter(retryCfg.baseDelayMs * 2 ** (attempt - 1)),
-        );
+        const waitMs = this.computeRetryDelayMs(undefined, undefined, attempt);
         await sleep(waitMs);
       }
     }
 
     throw lastErr;
+  }
+
+  private computeRetryDelayMs(
+    status: number | undefined,
+    retryAfterHeader: string | null | undefined,
+    attempt: number,
+  ): number {
+    const retryCfg: RetryConfig = this.cfg.retries;
+    const fallbackMs = Math.min(
+      retryCfg.maxDelayMs,
+      withJitter(retryCfg.baseDelayMs * 2 ** (attempt - 1)),
+    );
+
+    if (status !== 429 || !retryAfterHeader) {
+      return fallbackMs;
+    }
+
+    const numericSeconds = Number(retryAfterHeader);
+    if (Number.isFinite(numericSeconds) && numericSeconds >= 0) {
+      return Math.min(retryCfg.maxDelayMs, Math.floor(numericSeconds * 1000));
+    }
+
+    const parsedDate = Date.parse(retryAfterHeader);
+    if (Number.isFinite(parsedDate)) {
+      const diffMs = Math.max(0, parsedDate - Date.now());
+      return Math.min(retryCfg.maxDelayMs, diffMs);
+    }
+
+    return fallbackMs;
+  }
+
+  private assertAuthInput(input: BillitAuthInput): void {
+    if (!input.accessToken && !input.apiKey) {
+      throw new BillitValidationError("Either accessToken or apiKey is required for Billit API calls");
+    }
   }
 }

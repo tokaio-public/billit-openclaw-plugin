@@ -16,6 +16,7 @@
         config: {
           apiBaseUrl: "https://api.sandbox.billit.be",
           timeoutMs: 10000,
+          allowStateChangingOperations: false,
           retries: { maxAttempts: 3, baseDelayMs: 250, maxDelayMs: 4000 },
         },
       },
@@ -26,8 +27,6 @@
     allow: [
       "billit_invoices_list",
       "billit_invoice_get",
-      "billit_invoice_create",
-      "billit_invoice_send",
       "billit_oauth_exchange",
       "billit_oauth_refresh",
       "billit_webhook_verify",
@@ -52,8 +51,6 @@
           allow: [
             "billit_invoices_list",
             "billit_invoice_get",
-            "billit_invoice_create",
-            "billit_invoice_send",
             "billit_oauth_exchange",
             "billit_oauth_refresh",
             "billit_webhook_verify",

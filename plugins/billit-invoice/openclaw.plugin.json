@@ -11,12 +11,22 @@
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
+    "required": ["apiBaseUrl", "timeoutMs", "retries", "allowStateChangingOperations"],
     "properties": {
-      "apiBaseUrl": { "type": "string", "default": "https://api.sandbox.billit.be" },
+      "apiBaseUrl": {
+        "type": "string",
+        "pattern": "^https://",
+        "default": "https://api.sandbox.billit.be"
+      },
       "timeoutMs": { "type": "integer", "minimum": 1000, "maximum": 60000, "default": 10000 },
+      "allowStateChangingOperations": {
+        "type": "boolean",
+        "default": false
+      },
       "retries": {
         "type": "object",
         "additionalProperties": false,
+        "required": ["maxAttempts", "baseDelayMs", "maxDelayMs"],
         "properties": {
           "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 8, "default": 3 },
           "baseDelayMs": { "type": "integer", "minimum": 50, "maximum": 5000, "default": 250 },
@@ -29,6 +39,10 @@
     "apiBaseUrl": {
       "label": "Billit API base URL",
       "help": "Use sandbox for development, production only after approval"
+    },
+    "allowStateChangingOperations": {
+      "label": "Allow invoice create/send",
+      "help": "Keep disabled by default; enable only after explicit operator approval"
     }
   }
 }

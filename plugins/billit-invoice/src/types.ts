@@ -7,7 +7,13 @@ export type RetryConfig = {
 export type PluginConfig = {
   apiBaseUrl: string;
   timeoutMs: number;
+  allowStateChangingOperations: boolean;
   retries: RetryConfig;
+};
+
+export type BillitAuthInput = {
+  accessToken?: string;
+  apiKey?: string;
 };
 
 export type BillitAuthTokens = {

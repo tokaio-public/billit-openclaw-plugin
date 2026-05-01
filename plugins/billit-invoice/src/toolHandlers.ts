@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import type { Static } from "@sinclair/typebox";
 import { TypeCompiler } from "@sinclair/typebox/compiler";
 import { BillitHttpError, BillitValidationError } from "./errors.js";
 import { safeLog } from "./logging.js";
@@ -14,6 +15,19 @@ import {
 import { redactUnknown } from "./redaction.js";
 import type { BillitClient } from "./billitClient.js";
 
+type OAuthExchangeInput = Static<typeof OAuthExchangeSchema>;
+type OAuthRefreshInput = Static<typeof OAuthRefreshSchema>;
+type ListInvoicesInput = Static<typeof ListInvoicesSchema>;
+type GetInvoiceInput = Static<typeof GetInvoiceSchema>;
+type CreateInvoiceInput = Static<typeof CreateInvoiceSchema>;
+type SendInvoiceInput = Static<typeof SendInvoiceSchema>;
+type VerifyWebhookInput = Static<typeof VerifyWebhookSchema>;
+
+type BillitAuthInput = {
+  accessToken?: string;
+  apiKey?: string;
+};
+
 const validators = {
   oauthExchange: TypeCompiler.Compile(OAuthExchangeSchema),
   oauthRefresh: TypeCompiler.Compile(OAuthRefreshSchema),
@@ -28,7 +42,16 @@ function validationError(name: string): BillitValidationError {
   return new BillitValidationError(`Invalid ${name} parameters`);
 }
 
-function humanGate(requireHumanApproval: boolean | undefined, operation: string): void {
+function humanGate(
+  allowStateChangingOperations: boolean,
+  requireHumanApproval: boolean | undefined,
+  operation: string,
+): void {
+  if (!allowStateChangingOperations) {
+    throw new BillitValidationError(
+      `${operation} is disabled by plugin configuration. Enable allowStateChangingOperations only after explicit approval.`,
+    );
+  }
   if (requireHumanApproval !== false) {
     throw new BillitValidationError(
       `${operation} requires explicit human approval. Set requireHumanApproval=false only after manual review.`,
@@ -46,12 +69,19 @@ function sanitizeError(err: unknown): string {
   return "Unexpected error";
 }
 
-export function createHandlers(client: BillitClient) {
+function assertToolAuth(input: BillitAuthInput, operation: string): void {
+  if (!input.accessToken && !input.apiKey) {
+    throw new BillitValidationError(`${operation} requires either accessToken or apiKey`);
+  }
+}
+
+export function createHandlers(client: BillitClient, options: { allowStateChangingOperations: boolean }) {
   return {
     async oauthExchange(params: unknown): Promise<unknown> {
       if (!validators.oauthExchange.Check(params)) throw validationError("oauthExchange");
+      const input = params as OAuthExchangeInput;
       try {
-        const result = await client.exchangeCode(params);
+        const result = await client.exchangeCode(input);
         safeLog("billit.oauth.exchange.success", { expiresIn: result.expires_in });
         return {
           token_type: result.token_type,
@@ -68,8 +98,9 @@ export function createHandlers(client: BillitClient) {
 
     async oauthRefresh(params: unknown): Promise<unknown> {
       if (!validators.oauthRefresh.Check(params)) throw validationError("oauthRefresh");
+      const input = params as OAuthRefreshInput;
       try {
-        const result = await client.refreshToken(params);
+        const result = await client.refreshToken(input);
         safeLog("billit.oauth.refresh.success", { expiresIn: result.expires_in });
         return {
           token_type: result.token_type,
@@ -86,26 +117,33 @@ export function createHandlers(client: BillitClient) {
 
     async listInvoices(params: unknown): Promise<unknown> {
       if (!validators.listInvoices.Check(params)) throw validationError("listInvoices");
-      const result = await client.listInvoices(params);
+      const input = params as ListInvoicesInput;
+      assertToolAuth(input, "billit_invoices_list");
+      const result = await client.listInvoices(input);
       safeLog("billit.invoices.list.success", { itemCount: result.Items?.length ?? 0 });
       return redactUnknown(result);
     },
 
     async getInvoice(params: unknown): Promise<unknown> {
       if (!validators.getInvoice.Check(params)) throw validationError("getInvoice");
-      const result = await client.getInvoice(params);
-      safeLog("billit.invoice.get.success", { orderId: String(params.orderId) });
+      const input = params as GetInvoiceInput;
+      assertToolAuth(input, "billit_invoice_get");
+      const result = await client.getInvoice(input);
+      safeLog("billit.invoice.get.success", { orderId: String(input.orderId) });
       return redactUnknown(result);
     },
 
     async createInvoice(params: unknown): Promise<unknown> {
       if (!validators.createInvoice.Check(params)) throw validationError("createInvoice");
-      humanGate(params.requireHumanApproval, "Invoice creation");
-      const idempotencyKey = params.idempotencyKey || randomUUID();
+      const input = params as CreateInvoiceInput;
+      assertToolAuth(input, "billit_invoice_create");
+      humanGate(options.allowStateChangingOperations, input.requireHumanApproval, "Invoice creation");
+      const idempotencyKey = input.idempotencyKey || randomUUID();
       const result = await client.createInvoice({
-        accessToken: params.accessToken,
-        partyId: params.partyId,
-        invoice: params.invoice,
+        accessToken: input.accessToken,
+        apiKey: input.apiKey,
+        partyId: input.partyId,
+        invoice: input.invoice,
         idempotencyKey,
       });
       safeLog("billit.invoice.create.success", { idempotencyKey });
@@ -114,19 +152,22 @@ export function createHandlers(client: BillitClient) {
 
     async sendInvoice(params: unknown): Promise<unknown> {
       if (!validators.sendInvoice.Check(params)) throw validationError("sendInvoice");
-      humanGate(params.requireHumanApproval, "Invoice sending");
+      const input = params as SendInvoiceInput;
+      assertToolAuth(input, "billit_invoice_send");
+      humanGate(options.allowStateChangingOperations, input.requireHumanApproval, "Invoice sending");
       const idempotencyKey = randomUUID();
       const result = await client.sendInvoices({
-        accessToken: params.accessToken,
-        partyId: params.partyId,
-        orderIds: params.orderIds,
-        transportType: params.transportType,
-        strictTransportType: params.strictTransportType,
+        accessToken: input.accessToken,
+        apiKey: input.apiKey,
+        partyId: input.partyId,
+        orderIds: input.orderIds,
+        transportType: input.transportType,
+        strictTransportType: input.strictTransportType,
         idempotencyKey,
       });
       safeLog("billit.invoice.send.success", {
-        transportType: params.transportType,
-        orderCount: params.orderIds.length,
+        transportType: input.transportType,
+        orderCount: input.orderIds.length,
         idempotencyKey,
       });
       return redactUnknown(result);
@@ -134,11 +175,12 @@ export function createHandlers(client: BillitClient) {
 
     verifyWebhook(params: unknown): unknown {
       if (!validators.verifyWebhook.Check(params)) throw validationError("verifyWebhook");
+      const input = params as VerifyWebhookInput;
       const verification = client.verifyWebhookSignature({
-        signatureHeader: params.signatureHeader,
-        payload: params.payload,
-        secret: params.secret,
-        toleranceSeconds: params.toleranceSeconds ?? 300,
+        signatureHeader: input.signatureHeader,
+        payload: input.payload,
+        secret: input.secret,
+        toleranceSeconds: input.toleranceSeconds ?? 300,
       });
       safeLog("billit.webhook.verify", { valid: verification.valid, reason: verification.reason });
       return verification;
