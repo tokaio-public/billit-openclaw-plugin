@@ -100,7 +100,7 @@ All 76 tests should pass.
 Copy the example env file and fill in your values. Never commit the filled-in `.env` to source control.
 
 ```sh
-cp .env.example .env
+cp ../../.env.example .env
 ```
 
 Edit `.env`:
